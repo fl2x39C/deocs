@@ -145,14 +145,21 @@ class _ShotCut:
     def __repr__(self):
         return re.sub(r"x\d+","_",str(self).split('=>',1)[1].strip())
     
-    def __call__(self,*args):
-        if len(args)!= self._arity:
-            raise ArityError(self,self._arity,len(args))
-        if not isinstance(self._call,tuple):
-            return self._call(*args)
+    def __call__(self,*args,**kwargs):
+        apply = kwargs.pop('apply',None)
+        if apply is None:
+            if len(args)!= self._arity:
+                raise ArityError(self,self._arity,len(args))
+            if not isinstance(self._call,tuple):
+                return self._call(*args)
+            
+            f,l,r = self._call
+            return f(l(*args[:l._arity]),r(*args[l._arity:]))
+        if callable(apply):
+            return apply(self.__call__(*args),**kwargs)
         
-        f,l,r = self._call
-        return f(l(*args[:l._arity]),r(*args[l._arity:]))
+        raise TypeError("apply should be a callable or None")
+        
         
     __add__ = fmap(operator.add,"self + other")
     __sub__ = fmap(operator.sub,"self - other")
@@ -197,6 +204,12 @@ class _ShotCut:
     __matmul__= fmap(lambda a,b: isinstance(a,b),"self @ other")
     __rmatmul__= fmap(lambda a,b: isinstance(a,b),"other @ self")
 
+    in_ = fmap(lambda a,b: a in b,"self in other")
+    not_in = fmap(lambda a,b: a not in b,"self not in other")
+    instance_of = fmap(lambda a,b: isinstance(a,b),"isinstance(self,other)")
+    
+    
+    
 _ = _ShotCut()
 
 if __name__ == '__main__':
@@ -232,4 +245,15 @@ if __name__ == '__main__':
     
     f = _.__len__
     print(f("sdfsfd")(),f)
+    
+    f = _[0].in_([1,2,3])
+    
+    print(f([4]),f([3]),f)
+    
+    
+    f1 = iif(comp='==').when(1,"yes").when(0,"no")
+    
+    print(f([4],apply=f1),f([3],apply=f1),f)
+    
+    
 
