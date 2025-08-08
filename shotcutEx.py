@@ -37,7 +37,7 @@ def unary_fmap(expr_val,env_val=None):
         env.update(self.env)
         l,r = self.expr.split(':',1)
         expr = expr_val.expr if isinstance(expr_val,cls) else expr_val
-        body = f"({r.strip()})" if self.ix is None else r.strip()
+        body = f"({r.strip()})" if not isinstance(self.ix,int) else r.strip()
         expr = expr.replace('self',body)
         expr = f"{l} : {expr}"
         return cls(expr,env,self.arity,self.ix)
@@ -52,12 +52,12 @@ def fmap(expr_val,env_val=None):
         env = env_val.copy() if env_val is not None else {}
         env.update(self.env)
         l,r = self.expr.split(':',1)
-        body = f"({r.strip()})" if self.ix is None else r.strip()
+        body = f"({r.strip()})" if not isinstance(self.ix,int) else r.strip()
         
         if isinstance(other,cls):
             l2,r2 = other.expr.split(':',1)
             # print(expr_val,'----000077777777777')
-            body2 = f"({r2.strip()})" if other.ix is None else r2.strip()
+            body2 = f"({r2.strip()})" if  not isinstance(other.ix,int)  else r2.strip()
             expr = expr_val.replace('self',body).replace('other',body2)
             # print(expr,'----0000')
             env.update(other.env)
@@ -65,7 +65,10 @@ def fmap(expr_val,env_val=None):
             l2_replaced = l2.replace("lambda ","",1).replace(",*_,**__","",1).replace("*_,**__","",1)
             args_l = l_replaced.split(",")
             args_l2 = l2_replaced.split(",")
-            if self.ix == other.ix == 0:
+            i1 = 0 if self.ix == 0 or self.ix == '' else self.ix
+            i2 = 0 if other.ix == 0 or other.ix == '' else other.ix
+
+            if i1 == i2 == 0:
                 args_l,args_l2 = [i.strip() for i in args_l],[i.strip() for i in args_l2]
                 arity = len(args_l) + len(args_l2)
                 r = _replace_isolated_x(body,args_l)
@@ -91,7 +94,7 @@ def fmap(expr_val,env_val=None):
                 # print(f"{l2_replaced=}")
                 # print(f"lambda {', '.join(args)},*_,**__: {expr}")
                 # print('-.-'*30)
-                ix = 0
+                ix = ''
             else:
                 # print(args_l,args_l2)
                 args = [i.strip() for i in args_l]
@@ -130,10 +133,25 @@ def fmap(expr_val,env_val=None):
 class _IndexHolder:
     def __init__(self,expr=None,env=None,arity=1,ix=1):
         i = '' if ix == 0 else ix
-        self.expr = expr or f"lambda x{i},*_,**__: x{i}"
-        self.env = env or {'math':math,'builtins':builtins,'operator':operator,'random':random}
-        self.arity = arity
-        self.ix = ix
+        i = f"_{abs(i)}" if isinstance(i,int) and i < 0 else i
+        expr = expr or f"lambda x{i},*_,**__: x{i}"
+        env = env or {'math':math,'builtins':builtins,'operator':operator,'random':random}
+        # arity = arity
+        # ix = ix
+        f = super().__setattr__
+        f('expr',expr)
+        f('env',env)
+        f('arity',arity)
+        f('ix',ix)
+    
+    def __setattr__(self, name, value):
+        raise AttributeError("Object is immutable")
+    
+    def __delattr__(self, name):
+        raise AttributeError("Object is immutable")
+    
+    def __hash__(self):
+        return hash(self.expr)
     @property
     def call(self):
         return eval(self.expr,self.env)
@@ -154,7 +172,9 @@ class _IndexHolder:
                 raise TypeError(f"Expected {self.arity} arguments, got {len(args) + len(kwargs)}")
             return self.call(*args,**kwargs)
         return apply_func(self.call,*args,**kwargs)
-        
+    @property
+    def is_init(self):
+        return isinstance(self.ix,int) and self.ix >= 0
     
     __neg__ = unary_fmap("- self")
     __pos__ = unary_fmap("+ self")
@@ -355,5 +375,30 @@ if __name__ == "__main__":
     f = _.contain([1,2,3])
     print(f)
     print(f([1,2]),f([1]),f([4]),f([1,4,3,2]))
+    print('-.-'*35)
+    
+    f1 = _ + _
+    f2 = _ * f1
+    print(f2,f2(2,3,4))
+    
+    print('-.-'*35)
+    f1 = _3 + _1
+    f2 = _2 * f1
+    print(f2,f2(2,3,4))
     
     
+    f = _.and_(_ > 2).and_(_ < 4)
+    
+    # print(f,f(False,1),f(True,3),f(1,3))
+    print(f)
+    
+    try:
+        _.expr = "lambda x,y,z: x+y+z"
+    except AttributeError as e:
+        print(e)
+    
+    print(_.__class__)
+    
+    f = _.__class__(ix=-1)
+    f = ((f + f) * f +100) // f
+    print(f,f(12),f(1),f(10),f(7))    
